@@ -137,7 +137,8 @@ Executing
 
     $ nix-shell -p python35Packages.numpy python35Packages.toolz
 
-opens a Nix shell from which you can launch the Python interpreter
+opens a Nix shell which has available the requested packages and dependencies.
+Now you can launch the Python interpreter (which is itself a dependency)
 
     [nix-shell:~] python3
 
@@ -180,7 +181,7 @@ If you do not want this, you can use the `--pure` option.
 Likely you do not want to type your dependencies each and every time. What you
 can do is write a simple Nix expression which sets up an environment for you,
 requiring you only to type `nix-shell`. Say we want to have Python 3.5, `numpy`
-and `toolz`, like before, in an environment. With a `default.nix` file
+and `toolz`, like before, in an environment. With a `shell.nix` file
 containing
 
     with import <nixpkgs> {};
@@ -239,14 +240,15 @@ environment that we use for development, and another for blogging with
             buildInputs = with python27Packages; [
               python27
               pelican
+              markdown
             ];
         };
     };
     }
 
 For the first environment we want Python 3.4, and for the second Python 2.7.
-Note that we have to explicitly include the interpreter when using `myEnvFun`!.
-We can install these environments using `nix-env -i env-<name>` and use by
+Note that we have to explicitly include the interpreter when using `myEnvFun`!
+We can install these environments with `nix-env -i env-<name>` and use them by
 calling `load-env-<name>`. In both cases `<name>` is the argument `name` of the
 function `myEnvFun`.
 
@@ -259,7 +261,145 @@ function `myEnvFun`.
 
 You can now start the interpreter, `python3`.
 
+### Missing Python modules?
+
+At this point you might have gone ahead using the Nix shell or `myEnvFun` to create Python environments, and got some very surprising import errors, unrelated to those explained before.
+If you haven't encountered these yet, try running
+
+    $ nix-shell -p python27 --run python
+
+and then
+
+    >>> import sqlite3
+
+You will notice that you get an `ImportError`.
+
+    >>> import sqlite3
+    Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/nix/store/v9pq6f0s1r5fdybqc7pbv7mkb33lx9yy-python-2.7.10/lib/python2.7/sqlite3/__init__.py", line 24, in <module>
+        from dbapi2 import *
+    File "/nix/store/v9pq6f0s1r5fdybqc7pbv7mkb33lx9yy-python-2.7.10/lib/python2.7/sqlite3/dbapi2.py", line 28, in <module>
+        from _sqlite3 import *
+    ImportError: No module named _sqlite3
+
+
+What's going on here? In Nixpkgs the Python 2.x interpreters were sent on a diet. To [reduce dependency bloat](http://nixos.org/nixpkgs/manual/#sec-python) some modules were removed from the 2.x interpreters.
+If you do want some of these modules, then you have to include them explicitly, e.g.
+
+    $ nix-shell -p python27 python27.modules.sqlite3 --run python
+
+to include the `sqlite3` module. For convenience, there is also a `python27Full` package which includes all these modules
+
+    $ nix-shell -p python27Full python27Packages.numpy python27Packages.toolz --run python
+
+
+### How to find Python packages?
+
+So far we only considered two python packages, `numpy` and `toolz`. At this point you might be wondering how to find packages.
+You can search for packages with `nix-env -qa`. The `-q` stands for query and `-a` for available derivations. Let's search for `numpy`
+
+    $ nix-env -qa '.*numpy.*'
+    pypy2.6-numpydoc-0.5
+    python2.7-numpy-1.10.1
+    python2.7-numpydoc-0.5
+    python3.4-numpy-1.10.1
+    python3.4-numpydoc-0.5
+    python3.5-numpy-1.10.1
+    python3.5-numpydoc-0.5
+
+A tool that is generally easier to begin with is [Nox](https://github.com/madjar/nox). You can install Nox with `nix-env -i nox` or try it with `nix-shell -p nox`.
+Let's search for `numpy` with Nox.
+
+    $ nox numpy
+    Refreshing cache
+    1 pypy2.6-numpydoc-0.5 (nixos.pypyPackages.numpydoc)
+	Sphinx extension to support docstrings in Numpy format
+    2 python2.7-numpy-1.10.1 (nixos.python27Packages.numpy)
+	Scientific tools for Python
+    3 python2.7-numpydoc-0.5 (nixos.python27Packages.numpydoc)
+	Sphinx extension to support docstrings in Numpy format
+    4 python3.4-numpy-1.10.1 (nixos.python34Packages.numpy)
+	Scientific tools for Python
+    5 python3.4-numpydoc-0.5 (nixos.python34Packages.numpydoc)
+	Sphinx extension to support docstrings in Numpy format
+    6 python3.5-numpy-1.10.1 (nixos.python35Packages.numpy)
+	Scientific tools for Python
+    7 python3.5-numpydoc-0.5 (nixos.python35Packages.numpydoc)
+	Sphinx extension to support docstrings in Numpy format
+    Packages to install:
+
+Nox provides, among other things, an easier interface to `nix-env` for querying and installing packages.
+Nox shows you the name with version of packages, along with the Nix attribute, e.g. `nixos.python34Packages.numpy`.
+The first part is the identifier of the channel, in this case `nixos`, since
+
+    $ nix-channel --list
+    nixos https://nixos.org/channels/nixos-unstable
+
+Another example
+
+    $ nox pandas
+    1 pypy2.6-pandas-0.17.0 (nixos.pypyPackages.pandas)
+	Python Data Analysis Library
+    2 python2.7-pandas-0.17.0 (nixos.python27Packages.pandas)
+	Python Data Analysis Library
+    3 python3.4-pandas-0.17.0 (nixos.python34Packages.pandas)
+	Python Data Analysis Library
+    4 python3.5-pandas-0.17.0 (nixos.python35Packages.pandas)
+	Python Data Analysis Library
+    Packages to install:
+
+### Alternative interpreters and shells
+
+So far we considered only the CPython interpreter, but in the examples shown just before, you could see that packages for the PyPy interpreter also show up.
+Indeed, you can use the PyPy interpreter on Nix as well
+
+    $ nix-shell -p pypy --run pypy
+    Python 2.7.9 (295ee98b69288471b0fcf2e0ede82ce5209eb90b, Sep 21 2015, 22:02:02)
+    [PyPy 2.6.0 with GCC 4.9.3] on linux2
+    Type "help", "copyright", "credits" or "license" for more information.
+    >>>>
+
+We can get an environment with PyPy just like we did before.
+
+    $ nix-shell -p pypyPackages.numpy pypyPackages.toolz
+    error: numpy-1.10.1 not supported for interpreter pypy
+    (use ‘--show-trace’ to show detailed location information)
+
+This did result in an error though. Why? As the message explains, `numpy` is
+[not supported](http://pypy.org/numpydonate.html) for `pypy`, just like many
+other packages that include extension types.
+This is however not a Nix issue, but a PyPy issue. Even so, you will encounter
+these kind of errors more often, since also with CPython certain packages are
+supported on certain versions, but not all.
+
+Included in the Nix packages collection are also alternative Python shells, like Jupyter/IPython.
+Say we want to use `numpy` and `toolz` again but now using the IPython interpreter
+
+    $ nix-shell -p python34Packages.ipython python34Packages.numpy python34Packages.toolz --run ipython
+    Python 3.4.3 (default, Jan 01 1970, 00:00:01)
+    Type "copyright", "credits" or "license" for more information.
+
+    IPython 4.0.0 -- An enhanced Interactive Python.
+    ?         -> Introduction and overview of IPython's features.
+    %quickref -> Quick reference.
+    help      -> Python's own help system.
+    object?   -> Details about 'object', use 'object??' for extra details.
+
+    In [1]:
+
+We can also use the QtConsole
+
+    nix-shell -p python34Packages.qtconsole --run "jupyter qtconsole"
+
+or the Jupyter Notebook
+
+    nix-shell -p python34Packages.notebook --run "jupyter notebook"
+
+
 ## Developing a Python package
+
+
 
 When developing a Python package, one commonly uses `python setup.py develop`.
 The package is build

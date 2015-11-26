@@ -36,7 +36,7 @@ installation guide](http://nixos.org/nixos/manual/index.html#ch-installation).
 ### Installing software
 
 Now that you've installed Nix you're ready to start installing software.
-With the Nix package manager you can ad hoc install software in your profile
+With the Nix package manager you can [ad hoc install](http://nixos.org/nixos/manual/index.html#sec-ad-hoc-packages) software in your profile
 using `nix-env -iA`. e.g.
 
     $ nix-env -iA nixpkgs.pkgs.pandoc
@@ -45,7 +45,7 @@ would install the Pandoc tool in your profile. From then on you will have the
 possibility to run `pandoc` from within a shell.
 
 If you are running NixOS and you have `root`/`sudo` access, then you can specify
-which packages need to be installed by appending those packages to
+[declaratively](http://nixos.org/nixos/manual/index.html#sec-declarative-package-mgmt) which packages need to be installed by appending those packages to
 `environment.systemPackages` in the `/etc/nixos/configuration.nix` file
 
     ...
@@ -59,10 +59,10 @@ which packages need to be installed by appending those packages to
     ...
 
 A common method on Nix is however not to install all the software you need, but
-instead using the `nix-shell` to open a shell with exactly those packages that
-you need when you need them.
-E.g., say you want to convert a some files and so you want to use Pandoc, then
-you could run
+instead using the [Nix shell](https://nixos.org/nix/manual/#sec-nix-shell)
+(`nix-shell`) to open a shell with exactly those packages that you need when you
+need them. E.g., say you want to convert some files and so you want to use
+Pandoc, then you could run
 
     $ nix-shell -p pandoc
 
@@ -74,12 +74,11 @@ which opens a shell from which you can run pandoc
 ### Installing Python?
 
 You might be wondering now why, if this tutorial is about Python, we are using
-Pandoc as an example and not Python?
-Well, that's because with Python you're generally interested in not just the interpreter, but also Python packages.
-On Nix most software can be installed in a profile, either
-ad hoc or declaratively. However, this is not possibly with Python and packages.
-Actually, to be precise, the tools allow you to install to your profile e.g.
-Python 3.5 using
+Pandoc as an example and not Python? Well, that's because with Python you're
+generally interested in not just the interpreter, but also Python packages. On
+Nix most software can be installed in a profile, either ad hoc or declaratively.
+However, this is not possibly with Python and packages. Actually, to be precise,
+the tools allow you to install to your profile e.g. Python 3.5 using
 
     $ nix-env -iA nixpkgs.pkgs.python35
 
@@ -125,7 +124,7 @@ different applications might require different versions. How now, would the
 interpreter decide which version of say `numpy` to use, when multiple are
 installed?
 
-The bottomline is that *installing Python and packages is not supported*.
+The bottomline is that **installing Python and packages is not supported**.
 The way to go though is environments...
 
 
@@ -169,7 +168,8 @@ with the `-p` packages in it, as we did before, and then run the `-i`
 interpreter. Note that the `-i` option can only be used as part of a shebang. In
 other cases you will have to use the `--run` option as shown above.
 
-By default all installed applications are still accessible from the Nix shell. If you do not want this, you can use the `--pure` option.
+By default all installed applications are still accessible from the Nix shell.
+If you do not want this, you can use the `--pure` option.
 
     $ nix-env -iA nixpkgs.pkgs.pandoc
     $ nix-shell -p python35Packages.numpy python35Packages.toolz --pure
@@ -190,12 +190,74 @@ containing
     }).env
 
 executing `nix-shell` gives you again a Nix shell from which you can run Python.
-So what do those lines here mean? Let's consider line by line
+So what do those lines here mean? Let's consider line by line:
 
 1. We begin with importing the Nix Packages collections. `import <nixpkgs> {}` does the actual import and the `with` statement brings all attributes of `nixpkgs` in the local scope. Therefore we can now use `pkgs`.
-2. Then we say we want a Python 3.5 environment, so we use the derivation `pkgs.python35.buildEnv`. Because we want to use it with a custom set of Python packages, we override it.
+2. Then we say we want a Python 3.5 environment, so we use the derivation [`pkgs.python35.buildEnv`](http://nixos.org/nixpkgs/manual/#ssec-python-build-env). Because we want to use it with a custom set of Python packages, we override it.
 3. The `extraLibs` argument of the original `buildEnv` function can be used to specify which packages you want. We want `numpy` and `toolz`. Again, we use the `with` statement to bring a set of attributes into the local scope.
 4. EXPLAIN
+
+
+### Declarative environment using myEnvFun
+
+Using Nix shell means you either need to add a bunch of arguments to the
+`nix-shell` invocation, or executing a specific file with Nix shell. Another
+option is to instead define your environments [declaratively in your user
+profile](http://nixos.org/nixpkgs/manual/#chap-packageconfig). As user you have
+a `~/.nixpkgs/config.nix` file in which you can include
+[overrides](http://nixos.org/nixpkgs/manual/#sec-modify-via-packageOverrides)
+specifically for yourself. Here we can add our declarative environments as well.
+Let's say we already have the following `config.nix`.
+
+    with <nixpkgs> {};
+    {
+    allowUnfree = true;
+    }
+
+This expression imports the Nix packages collections, and says that we allow
+unfree software. Let's extend this now with two environments. We add one
+environment that we use for development, and another for blogging with
+[Pelican](http://blog.getpelican.com/).
+
+    with <nixpkgs> {};
+    {
+    allowUnfree = true;
+    allowBroken = true;
+
+    packageOverrides = pkgs: with pkgs; {
+        devEnv = pkgs.myEnvFun {
+            name = "work";
+            buildInputs = with python34Packages; [
+              python34
+              numpy
+              toolz
+            ];
+        };
+
+        blogEnv = pkgs.myEnvFun {
+            name = "blog";
+            buildInputs = with python27Packages; [
+              python27
+              pelican
+            ];
+        };
+    };
+    }
+
+For the first environment we want Python 3.4, and for the second Python 2.7.
+Note that we have to explicitly include the interpreter when using `myEnvFun`!.
+We can install these environments using `nix-env -i env-<name>` and use by
+calling `load-env-<name>`. In both cases `<name>` is the argument `name` of the
+function `myEnvFun`.
+
+    $ nix-env -i env-work
+    installing ‘env-work’
+
+    $ load-env-work
+    env-work loaded
+    work:[~]$
+
+You can now start the interpreter, `python3`.
 
 ## Developing a Python package
 

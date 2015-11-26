@@ -30,6 +30,9 @@ installation guide](http://nixos.org/nixos/manual/index.html#ch-installation).
 
 ## Using Python
 
+<!-- You want to be able to use the Python interpreter, along with a bunch of Python packages? Read on! -->
+
+
 ### Installing software
 
 Now that you've installed Nix you're ready to start installing software.
@@ -122,25 +125,77 @@ different applications might require different versions. How now, would the
 interpreter decide which version of say `numpy` to use, when multiple are
 installed?
 
-The bottomline is that simply installing Python and packages is not supported.
+The bottomline is that *installing Python and packages is not supported*.
 The way to go though is environments...
 
 
 ### Python using nix-shell
 
-Perhaps the easiest way to get a functional Python environment is by using `nix-shell`.
-Running
+Perhaps the easiest way to get a functional Python environment is by using
+[`nix-shell`](http://nixos.org/nix/manual/#sec-nix-shell).
+
+Executing
 
     $ nix-shell -p python35Packages.numpy python35Packages.toolz
 
-opens a Nix shell from which you can launch Python
+opens a Nix shell from which you can launch the Python interpreter
 
-    [nix-shell:~] python35
+    [nix-shell:~] python3
 
-A convenient option with `nix-shell` is the `-i` flag, with which you can directly launch another shell.
+If the packages were not available yet in the Nix store, Nix would download or
+compile them automatically.
+A convenient option with `nix-shell` is the `--run` option, with which you can
+execute a command in the `nix-shell`. Let's say we want the above environment
+and directly run the Python interpreter
 
-    $ nix-shell -i python35 python35Packages.numpy python35Packages.toolz
+    $ nix-shell -p python35Packages.numpy python35Packages.toolz --run "python3"
 
+You can also use the `--run` option to directly execute a script
+
+    $ nix-shell -p python35Packages.numpy python35Packages.toolz --run "python3 myscript.py"
+
+For this specific case there is another convenient method; you can add a shebang
+to your script specifying which dependencies Nix shell needs. With the following
+shebang, you can use `nix-shell myscript.py` and it will make available all
+dependencies and run the script in the `python3` shell.
+
+    #! /usr/bin/env nix-shell
+    #! nix-shell -i python3 -p python35Packages.numpy python35Packages.toolz
+
+The first line here is a standard shebang. We say we want to use `nix-shell`.
+With the Nix shell you are however not limited to only a single line, but you
+can have multiple. The second line instructs Nix shell to create an environment
+with the `-p` packages in it, as we did before, and then run the `-i`
+interpreter. Note that the `-i` option can only be used as part of a shebang. In
+other cases you will have to use the `--run` option as shown above.
+
+By default all installed applications are still accessible from the Nix shell. If you do not want this, you can use the `--pure` option.
+
+    $ nix-env -iA nixpkgs.pkgs.pandoc
+    $ nix-shell -p python35Packages.numpy python35Packages.toolz --pure
+    [nix-shell:~] pandoc
+    The program ‘pandoc’ is currently not installed. You can install it by typing:
+      nix-env -iA nixos.pandoc
+
+Likely you do not want to type your dependencies each and every time. What you
+can do is write a simple Nix expression which sets up an environment for you,
+requiring you only to type `nix-shell`. Say we want to have Python 3.5, `numpy`
+and `toolz`, like before, in an environment. With a `default.nix` file
+containing
+
+    with import <nixpkgs> {};
+
+    ( pkgs.python35.buildEnv.override  {
+    extraLibs = with pkgs.python35Packages; [ numpy toolz ];
+    }).env
+
+executing `nix-shell` gives you again a Nix shell from which you can run Python.
+So what do those lines here mean? Let's consider line by line
+
+1. We begin with importing the Nix Packages collections. `import <nixpkgs> {}` does the actual import and the `with` statement brings all attributes of `nixpkgs` in the local scope. Therefore we can now use `pkgs`.
+2. Then we say we want a Python 3.5 environment, so we use the derivation `pkgs.python35.buildEnv`. Because we want to use it with a custom set of Python packages, we override it.
+3. The `extraLibs` argument of the original `buildEnv` function can be used to specify which packages you want. We want `numpy` and `toolz`. Again, we use the `with` statement to bring a set of attributes into the local scope.
+4. EXPLAIN
 
 ## Developing a Python package
 

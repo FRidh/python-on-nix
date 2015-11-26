@@ -41,7 +41,7 @@ using `nix-env -iA`. e.g.
 
     $ nix-env -iA nixpkgs.pkgs.pandoc
 
-would install the Pandoc tool in your profile. From then on you will have the
+would install the [Pandoc](http://pandoc.org/) tool in your profile. From then on you will have the
 possibility to run `pandoc` from within a shell.
 
 If you are running NixOS and you have `root`/`sudo` access, then you can specify
@@ -121,7 +121,7 @@ system-wide, along with maybe some Python packages. As user, you realise you
 want to have some additional packages so you install them using `nix-env -iA`.
 Remember, with Nix, you can have multiple versions of libraries because
 different applications might require different versions. How now, would the
-interpreter decide which version of say `numpy` to use, when multiple are
+interpreter decide which version of say [`numpy`](http://www.numpy.org/) to use, when multiple are
 installed?
 
 The bottomline is that **installing Python and packages is not supported**.
@@ -363,10 +363,13 @@ Indeed, you can use the PyPy interpreter on Nix as well
 We can get an environment with PyPy just like we did before.
 
     $ nix-shell -p pypyPackages.numpy pypyPackages.toolz
+
+but this results in an error
+
     error: numpy-1.10.1 not supported for interpreter pypy
     (use ‘--show-trace’ to show detailed location information)
 
-This did result in an error though. Why? As the message explains, `numpy` is
+Why is that? As the message explains, `numpy` is
 [not supported](http://pypy.org/numpydonate.html) for `pypy`, just like many
 other packages that include extension types.
 This is however not a Nix issue, but a PyPy issue. Even so, you will encounter
@@ -374,7 +377,7 @@ these kind of errors more often, since also with CPython certain packages are
 supported on certain versions, but not all.
 
 Included in the Nix packages collection are also alternative Python shells, like Jupyter/IPython.
-Say we want to use `numpy` and `toolz` again but now using the IPython interpreter
+Say we want to use `numpy` and `toolz` again but now using the [IPython](http://ipython.org/) interpreter
 
     $ nix-shell -p python34Packages.ipython python34Packages.numpy python34Packages.toolz --run ipython
     Python 3.4.3 (default, Jan 01 1970, 00:00:01)
@@ -388,16 +391,88 @@ Say we want to use `numpy` and `toolz` again but now using the IPython interpret
 
     In [1]:
 
-We can also use the QtConsole
+We can also use the [Jupyter QtConsole](http://jupyter.org/qtconsole/stable/)
 
     nix-shell -p python34Packages.qtconsole --run "jupyter qtconsole"
 
-or the Jupyter Notebook
+or the [Jupyter Notebook](http://jupyter.org/)
 
     nix-shell -p python34Packages.notebook --run "jupyter notebook"
 
 
 ## Developing a Python package
+
+Now that you know how to get a working Python environment on Nix, it is time to go forward and start actually developing with Python.
+We will first have a look at how Python packages are packaged on Nix. Then, we will look how you can use development mode with your code.
+
+### Python packaging on Nix
+
+On Nix all packages are build by functions. The main function in Nix for building Python packages is [`buildPythonPackage`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/python-modules/generic/default.nix).
+Let's see how we would build the `toolz` package. According to [`python-packages.nix`](https://raw.githubusercontent.com/NixOS/nixpkgs/master/pkgs/top-level/python-packages.nix) `toolz` is build using
+
+    toolz = buildPythonPackage rec{
+      name = "toolz-${version}";
+      version = "0.7.4";
+
+      src = pkgs.fetchurl{
+        url = "https://pypi.python.org/packages/source/t/toolz/toolz-${version}.tar.gz";
+        sha256 = "43c2c9e5e7a16b6c88ba3088a9bfc82f7db8e13378be7c78d6c14a5f8ed05afd";
+      };
+
+      meta = {
+        homepage = "http://github.com/pytoolz/toolz/";
+        description = "List processing tools and functional utilities";
+        license = licenses.bsd3;
+        maintainers = with maintainers; [ fridh ];
+      };
+    };
+
+What happens here? The function `buildPythonPackage` is called and as argument
+it accepts a set. In this case the set is a recursive set (`rec`). One of the
+arguments is the name of the package, which consists of a basename (generally
+following the name on PyPi) and a version. Another argument, `src` specifies the
+source, which in this case is fetched from an url. `fetchurl` not only downloads
+the target file, but also validates its hash. Furthermore, we specify some
+(optional) meta information.
+
+The output of the function is a derivation, which is an attribute with the name
+`toolz` of the set `pythonpackages`. Say we want to use this derivation in one
+of our environments, then we could create a `shell.nix` file with the following contents
+
+    with import <nixpkgs> {};
+
+    ( let
+        toolz = pkgs.python35Packages.buildPythonPackage rec{
+          name = "toolz-${version}";
+          version = "0.7.4";
+
+          src = pkgs.fetchurl{
+            url = "https://pypi.python.org/packages/source/t/toolz/toolz-${version}.tar.gz";
+            sha256 = "43c2c9e5e7a16b6c88ba3088a9bfc82f7db8e13378be7c78d6c14a5f8ed05afd";
+          };
+
+          meta = {
+            homepage = "http://github.com/pytoolz/toolz/";
+            description = "List processing tools and functional utilities";
+            license = licenses.bsd3;
+            maintainers = with maintainers; [ fridh ];
+          };
+        };
+
+    in pkgs.python35.buildEnv.override rec {
+
+      extraLibs = [ toolz ];
+    }
+    ).env
+
+Running `nix-shell` gives us a Python 3.5 environment that includes our package.
+We took here the Nix expression that we used before to build a Python environment, and said that we wanted to include our own package.
+To introduce our own package in the scope of `buildEnv.override` we used a `let` expression.
+
+### Development mode
+
+We looked at how we package software on Nix. Why is this relevant for you, you might ask?
+
 
 
 
@@ -406,11 +481,12 @@ The package is build
 
 
 
-### buildPythonPackage
-
-
 
 
 ## Python on Nix internals
 
 
+### Important files
+
+  - [`buildPythonPackage`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/python-modules/generic/default.nix) is a function to build Python packages.
+  - [`python-packages.nix`](https://raw.githubusercontent.com/NixOS/nixpkgs/master/pkgs/top-level/python-packages.nix) is a Nix expression listing most of Python packages that are available in Nix.

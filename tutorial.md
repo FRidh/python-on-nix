@@ -1,6 +1,6 @@
 # Python on Nix
 
-You're Python dev, and recently you've heard about [Nix](http://nixos.org/nix/).
+You're a Python dev, and recently you've heard about [Nix](http://nixos.org/nix/).
 Immediately convinced by sane package management you decide you want to start
 using Nix. But before you do so, there's still an important question that you
 want an answer to. **How does Nix affect my Python development workflow?**
@@ -23,7 +23,7 @@ modules).
 ## Getting started
 
 If you don't have Nix yet, and you would like to install it on your *Nix system,
-then head on to the [Quick
+then head on to the [Nix Quick
 Start](http://nixos.org/nix/manual/#chap-quick-start).
 if instead you want to install NixOS, then please continue now with the [NixOS
 installation guide](http://nixos.org/nixos/manual/index.html#ch-installation).
@@ -407,7 +407,7 @@ We will first have a look at how Python packages are packaged on Nix. Then, we w
 
 ### Python packaging on Nix
 
-On Nix all packages are build by functions. The main function in Nix for building Python packages is [`buildPythonPackage`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/python-modules/generic/default.nix).
+On Nix all packages are built by functions. The main function in Nix for building Python packages is [`buildPythonPackage`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/python-modules/generic/default.nix).
 Let's see how we would build the `toolz` package. According to [`python-packages.nix`](https://raw.githubusercontent.com/NixOS/nixpkgs/master/pkgs/top-level/python-packages.nix) `toolz` is build using
 
     toolz = buildPythonPackage rec{
@@ -428,16 +428,44 @@ Let's see how we would build the `toolz` package. According to [`python-packages
     };
 
 What happens here? The function `buildPythonPackage` is called and as argument
-it accepts a set. In this case the set is a recursive set (`rec`). One of the
+it accepts a set. In this case the set is a recursive set ([`rec`](http://nixos.org/nix/manual/#sec-constructs)). One of the
 arguments is the name of the package, which consists of a basename (generally
 following the name on PyPi) and a version. Another argument, `src` specifies the
 source, which in this case is fetched from an url. `fetchurl` not only downloads
 the target file, but also validates its hash. Furthermore, we specify some
-(optional) meta information.
+(optional) [meta information](http://nixos.org/nixpkgs/manual/#chap-meta).
 
 The output of the function is a derivation, which is an attribute with the name
-`toolz` of the set `pythonpackages`. Say we want to use this derivation in one
-of our environments, then we could create a `shell.nix` file with the following contents
+`toolz` of the set `pythonPackages`. Actually, sets are created for all interpreter versions,
+so `python27Packages`, `python34Packages`, `python35Packages` and `pypyPackages`.
+
+The above example works when you're directly adding or modifying packages to `python-packages.nix`.
+Often though, you will want to test a Nix expression outside of the Nixpkgs tree. If you create a `shell.nix` file with the following contents
+
+    with import <nixpkgs> {};
+
+    pkgs.python35Packages.buildPythonPackage rec {
+      name = "toolz-${version}";
+      version = "0.7.4";
+
+      src = pkgs.fetchurl{
+        url = "https://pypi.python.org/packages/source/t/toolz/toolz-${version}.tar.gz";
+        sha256 = "43c2c9e5e7a16b6c88ba3088a9bfc82f7db8e13378be7c78d6c14a5f8ed05afd";
+      };
+
+      meta = {
+        homepage = "http://github.com/pytoolz/toolz/";
+        description = "List processing tools and functional utilities";
+        license = licenses.bsd3;
+        maintainers = with maintainers; [ fridh ];
+      };
+    }
+and then execute `nix-shell` will result in an environment in which you can use
+Python 3.5 and the `toolz` package. As you can see we had to explicitly mention
+for which Python version we want to build a package.
+
+Often though, you will want to use a package in environments together with other packages.
+If we create a `shell.nix` file with the following contents
 
     with import <nixpkgs> {};
 
@@ -461,16 +489,49 @@ of our environments, then we could create a `shell.nix` file with the following 
 
     in pkgs.python35.buildEnv.override rec {
 
-      extraLibs = [ toolz ];
+      extraLibs = [ numpy toolz ];
     }
     ).env
 
-Running `nix-shell` gives us a Python 3.5 environment that includes our package.
-We took here the Nix expression that we used before to build a Python environment, and said that we wanted to include our own package.
-To introduce our own package in the scope of `buildEnv.override` we used a `let` expression.
+and again execute `nix-shell`, then we get a Python 3.5 environment with our
+locally defined package as well as `numpy` which is build according to the
+definition in Nixpkgs. What did we do here? Well, we took the Nix expression
+that we used earlier to build a Python environment, and said that we wanted to
+include our own version of `toolz`. To introduce our own package in the scope of
+`buildEnv.override` we used a
+[`let`](http://nixos.org/nix/manual/#sec-constructs) expression.
 
-### Development mode
+### Developing with Nix shell
 
+When building a package, Nix sequentially goes through a series of
+[phases](http://nixos.org/nixpkgs/manual/#sec-stdenv-phases). Separate phases
+exist for e.g. unpacking the source code, patching it, building it and
+installing it. `buildPythonPackage`
+[modifies](http://nixos.org/nixpkgs/manual/#ssec-build-python-package) these
+generic phases slightly in order to use the Python infrastructure.
+
+If you tested the above examples, then hopefully everything ran without
+problems. Unfortunately, that is not always the case. Sometimes you encounter
+problems when building a package. When this happens Nix aborts the build, and
+removes all build data. This can be annoying, especially when after a long time
+of compiling just a single test fails and Nix decides to abort.
+
+Luckily there is the `-K` option to
+
+
+
+
+
+meaning sometimes there's maybe a single test failing, and youE.g., if you're building a Python package which took a long time to compile (e.g. `scikitlearn`) In such cases you might want to quickly change
+
+
+### Develop local package
+
+In the previous Nix expression the source was fetched from an url. It is however also possible to just refer to a local path using
+
+    src = ./path/to/source/tree;
+
+If we have a local path,
 We looked at how we package software on Nix. Why is this relevant for you, you might ask?
 
 

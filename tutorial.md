@@ -532,14 +532,14 @@ The following example shows which arguments are given to `buildPythonPackage` in
     };
 
 We can see several runtime dependencies, `numpy`, `multipledispatch`, and
-`dateutil`. Furthermore, we have one `buildInput`, i.e. `pytest`. `pytest` is a test runner and is
-only used during the `checkPhase` and is therefore not added to
-`propagatedBuildInputs`.
+`dateutil`. Furthermore, we have one `buildInput`, i.e. `pytest`. `pytest` is a
+test runner and is only used during the `checkPhase` and is therefore not added
+to `propagatedBuildInputs`.
 
 In the previous case we had only dependencies on other packages to consider.
-Occasionally you have also system libraries to consider. E.g., `lxml` provides Python bindings to
-`libxml2` and `libxslt`. These libraries are only required when building the bindings and are
-therefore added as `buildInputs`.
+Occasionally you have also system libraries to consider. E.g., `lxml` provides
+Python bindings to `libxml2` and `libxslt`. These libraries are only required
+when building the bindings and are therefore added as `buildInputs`.
 
     lxml = buildPythonPackage rec {
       name = "lxml-3.4.4";
@@ -559,8 +559,46 @@ therefore added as `buildInputs`.
       };
     };
 
-In this example `lxml` and Nix are able to work out exactly where the relevant files of the dependencies are.
-This is not always the case.
+In this example `lxml` and Nix are able to work out exactly where the relevant
+files of the dependencies are. This is not always the case.
+
+The example below shows bindings to The Fastest Fourier Transform in the West, commonly known as
+FFTW. On Nix we have separate packages of FFTW for the different types of floats
+(`"single"`, `"double"`, `"long-double"`). The bindings need all three types,
+and therefore we add all three as `buildInputs`. The bindings don't expect to
+find each of them in a different folder, and therefore we have to set `LDFLAGS`
+and [`CFLAGS`](https://en.wikipedia.org/wiki/CFLAGS).
+
+    pyfftw = buildPythonPackage rec {
+      name = "pyfftw-${version}";
+      version = "0.9.2";
+
+      src = pkgs.fetchurl {
+        url = "https://pypi.python.org/packages/source/p/pyFFTW/pyFFTW-${version}.tar.gz";
+        sha256 = "f6bbb6afa93085409ab24885a1a3cdb8909f095a142f4d49e346f2bd1b789074";
+      };
+
+      buildInputs = [ pkgs.fftw pkgs.fftwFloat pkgs.fftwLongDouble];
+
+      propagatedBuildInputs = with self; [ numpy scipy ];
+
+      # Tests cannot import pyfftw. pyfftw works fine though.
+      doCheck = false;
+
+      preConfigure = ''
+        export LDFLAGS="-L${pkgs.fftw}/lib -L${pkgs.fftwFloat}/lib -L${pkgs.fftwLongDouble}/lib"
+        export CFLAGS="-I${pkgs.fftw}/include -I${pkgs.fftwFloat}/include -I${pkgs.fftwLongDouble}/include"
+      '';
+
+      meta = {
+        description = "A pythonic wrapper around FFTW, the FFT library, presenting a unified interface for all the supported transforms";
+        homepage = http://hgomersall.github.com/pyFFTW/;
+        license = with licenses; [ bsd2 bsd3 ];
+        maintainer = with maintainers; [ fridh ];
+      };
+    };
+
+Note also the line `doCheck = false;`, we explicitly disabled running the test-suite.
 
 ### Developing with Nix shell
 

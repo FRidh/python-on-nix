@@ -199,7 +199,7 @@ So what do those lines here mean? Let's consider line by line:
 4. **EXPLAIN**
 
 
-<!--### Declarative environment using myEnvFun
+### Declarative environment using myEnvFun
 
 Using Nix shell means you either need to add a bunch of arguments to the
 `nix-shell` invocation, or executing a specific file with Nix shell. Another
@@ -259,7 +259,7 @@ function `myEnvFun`.
     env-work loaded
     work:[~]$
 
-You can now start the interpreter, `python3`.-->
+You can now start the interpreter, `python3`.
 
 ### Missing Python modules?
 
@@ -560,7 +560,7 @@ therefore added as `buildInputs`.
     };
 
 In this example `lxml` and Nix are able to work out exactly where the relevant files of the dependencies are.
-This is not always the case. 
+This is not always the case.
 
 ### Developing with Nix shell
 

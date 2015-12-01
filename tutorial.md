@@ -196,10 +196,10 @@ So what do those lines here mean? Let's consider line by line:
 1. We begin with importing the Nix Packages collections. `import <nixpkgs> {}` does the actual import and the `with` statement brings all attributes of `nixpkgs` in the local scope. Therefore we can now use `pkgs`.
 2. Then we say we want a Python 3.5 environment, so we use the derivation [`pkgs.python35.buildEnv`](http://nixos.org/nixpkgs/manual/#ssec-python-build-env). Because we want to use it with a custom set of Python packages, we override it.
 3. The `extraLibs` argument of the original `buildEnv` function can be used to specify which packages you want. We want `numpy` and `toolz`. Again, we use the `with` statement to bring a set of attributes into the local scope.
-4. EXPLAIN
+4. **EXPLAIN**
 
 
-### Declarative environment using myEnvFun
+<!--### Declarative environment using myEnvFun
 
 Using Nix shell means you either need to add a bunch of arguments to the
 `nix-shell` invocation, or executing a specific file with Nix shell. Another
@@ -259,7 +259,7 @@ function `myEnvFun`.
     env-work loaded
     work:[~]$
 
-You can now start the interpreter, `python3`.
+You can now start the interpreter, `python3`.-->
 
 ### Missing Python modules?
 
@@ -399,7 +399,6 @@ or the [Jupyter Notebook](http://jupyter.org/)
 
     nix-shell -p python34Packages.notebook --run "jupyter notebook"
 
-
 ## Developing a Python package
 
 Now that you know how to get a working Python environment on Nix, it is time to go forward and start actually developing with Python.
@@ -501,11 +500,73 @@ include our own version of `toolz`. To introduce our own package in the scope of
 `buildEnv.override` we used a
 [`let`](http://nixos.org/nix/manual/#sec-constructs) expression.
 
+## Handling dependencies
+
+So far the example, `toolz`, didn't have any dependencies on other Python
+packages or system libraries. According to the manual, the `buildPythonPackage`
+uses the arguments `buildInputs` and `propagatedBuildInputs`. If something is
+exclusively a build-time dependency, then the dependency should be included as a
+`buildInput`, but if it is (also) a runtime dependency, then it should be added
+to `propagatedBuildInputs`.
+
+The following example shows which arguments are given to `buildPythonPackage` in order to be build [`datashape`](https://github.com/blaze/datashape).
+
+    datashape = buildPythonPackage rec {
+      name = "datashape-${version}";
+      version = "0.4.7";
+
+      src = pkgs.fetchurl {
+        url = "https://pypi.python.org/packages/source/D/DataShape/${name}.tar.gz";
+        sha256 = "14b2ef766d4c9652ab813182e866f493475e65e558bed0822e38bf07bba1a278";
+      };
+
+      buildInputs = with self; [ pytest ];
+      propagatedBuildInputs = with self; [ numpy multipledispatch dateutil ];
+
+      meta = {
+        homepage = https://github.com/ContinuumIO/datashape;
+        description = "A data description language";
+        license = licenses.bsd2;
+        maintainers = with maintainers; [ fridh ];
+      };
+    };
+
+We can see several runtime dependencies, `numpy`, `multipledispatch`, and
+`dateutil`. Furthermore, we have one `buildInput`, i.e. `pytest`. `pytest` is a test runner and is
+only used during the `checkPhase` and is therefore not added to
+`propagatedBuildInputs`.
+
+In the previous case we had only dependencies on other packages to consider.
+Occasionally you have also system libraries to consider. E.g., `lxml` provides Python bindings to
+`libxml2` and `libxslt`. These libraries are only required when building the bindings and are
+therefore added as `buildInputs`.
+
+    lxml = buildPythonPackage rec {
+      name = "lxml-3.4.4";
+
+      src = pkgs.fetchurl {
+        url = "http://pypi.python.org/packages/source/l/lxml/${name}.tar.gz";
+        sha256 = "16a0fa97hym9ysdk3rmqz32xdjqmy4w34ld3rm3jf5viqjx65lxk";
+      };
+
+      buildInputs = with self; [ pkgs.libxml2 pkgs.libxslt ];
+
+      meta = {
+        description = "Pythonic binding for the libxml2 and libxslt libraries";
+        homepage = http://lxml.de;
+        license = licenses.bsd3;
+        maintainers = with maintainers; [ sjourdois ];
+      };
+    };
+
+In this example `lxml` and Nix are able to work out exactly where the relevant files of the dependencies are.
+This is not always the case. 
+
 ### Developing with Nix shell
 
 When building a package, Nix sequentially goes through a series of
 [phases](http://nixos.org/nixpkgs/manual/#sec-stdenv-phases). Separate phases
-exist for e.g. unpacking the source code, patching it, building it and
+exist for unpacking the source code, patching it, building it and
 installing it. `buildPythonPackage`
 [modifies](http://nixos.org/nixpkgs/manual/#ssec-build-python-package) these
 generic phases slightly in order to use the Python infrastructure.
@@ -514,7 +575,7 @@ If you tested the above examples, then hopefully everything ran without
 problems. Unfortunately, that is not always the case. Sometimes you encounter
 problems when building a package. When this happens Nix aborts the build, and
 removes all build data. This can be annoying, especially when after a long time
-of compiling just a single test fails and Nix decides to abort.
+of compiling just a single test fails and Nix decides to abort (example: `scikitlearn`).
 
 Luckily there is the `-K` option to
 
@@ -542,12 +603,12 @@ The package is build
 
 
 
-
-
 ## Python on Nix internals
 
 
-### Important files
+### Important files and folders
 
   - [`buildPythonPackage`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/python-modules/generic/default.nix) is a function to build Python packages.
   - [`python-packages.nix`](https://raw.githubusercontent.com/NixOS/nixpkgs/master/pkgs/top-level/python-packages.nix) is a Nix expression listing most of Python packages that are available in Nix.
+  - Folder with [expressions for Python interpreters](https://github.com/NixOS/nixpkgs/tree/master/pkgs/development/interpreters/python).
+   - ['wrapper.nix'](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/wrapper.nix) wraps Python binaries.

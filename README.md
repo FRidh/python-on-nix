@@ -1,2 +1,3 @@
 # python-on-nix
-Tutorial showing you can use Python on Nix
+
+This repository contains a [tutorial](http://python-on-nix.readthedocs.org/en/latest/) to [Python](https://www.python.org/) on [Nix](http://nixos.org/nix/).

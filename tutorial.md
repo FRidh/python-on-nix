@@ -650,3 +650,21 @@ The package is build
   - [`python-packages.nix`](https://raw.githubusercontent.com/NixOS/nixpkgs/master/pkgs/top-level/python-packages.nix) is a Nix expression listing most of Python packages that are available in Nix.
   - Folder with [expressions for Python interpreters](https://github.com/NixOS/nixpkgs/tree/master/pkgs/development/interpreters/python).
    - ['wrapper.nix'](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/wrapper.nix) wraps Python binaries.
+
+## FAQ
+
+### How can I prevent my packages from being garbage-collected?
+
+So you're using `nix-shell` and whenever you run `nix-collect-garbage -d` your packages are gone?
+
+With `nix-shell`...
+
+On NixOS the `system.extraDependencies` option for `configuration.nix` exists.
+Packages added here are added to the Nix store, but not made available to users.
+
+    system.extraDependencies = with pkgs.python35Packages; [
+      numpy
+      toolz
+    ];
+
+

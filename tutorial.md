@@ -554,7 +554,7 @@ with import <nixpkgs> {};
 
   in pkgs.python35.buildEnv.override rec {
 
-    extraLibs = [ numpy toolz ];
+    extraLibs = [ pkgs.python35Packages.numpy toolz ];
 }
 ).env
 ```
@@ -750,7 +750,61 @@ In previous examples we used `import` generally in combination with the `with`
 statement, thereby introducing the attributes of the imported attribute set into
 the local scope. We can also simply assign the imported attribute set using a `let` expression.
 
-Consider the following `shell.nix` file
+### Including a derivation using `callPackage`
+Earlier we created a Python environment using `buildEnv`, and included the `toolz` package via a `let` expression.
+Let's split the package definition from the environment definition.
+
+We first create a function that builds `toolz` in `~/path/to/toolz/release.nix`
+
+```nix
+{ pkgs, buildPythonPackage }:
+
+buildPythonPackage rec {
+  name = "toolz-${version}";
+  version = "0.7.4";
+
+  src = pkgs.fetchurl{
+    url = "https://pypi.python.org/packages/source/t/toolz/toolz-${version}.tar.gz";
+    sha256 = "43c2c9e5e7a16b6c88ba3088a9bfc82f7db8e13378be7c78d6c14a5f8ed05afd";
+  };
+
+  meta = {
+    homepage = "http://github.com/pytoolz/toolz/";
+    description = "List processing tools and functional utilities";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ fridh ];
+  };
+};
+```
+
+It takes two arguments, `pkgs` and `buildPythonPackage`.
+We now call this function using `callPackage` in the definition of our environment
+
+```nix
+with import <nixpkgs> {};
+
+( let
+    toolz = pkgs.callPackage ~/path/to/toolz/release.nix { pkgs=pkgs; buildPythonPackage=pkgs.python35Packages.buildPythonPackage; };
+  in pkgs.python35.buildEnv.override rec {
+    extraLibs = [ pkgs.python35Packages.numpy  toolz ];
+}
+).env
+```
+
+Important to remember is that the Python version for which the package is made
+depends on the `python` derivation that is passed to `buildPythonPackage`. Nix
+tries to automatically pass arguments when possible, which is why generally you
+don't explicitly define which `python` derivation should be used. In the above
+example we use `buildPythonPackage` that is part of the set `python35Packages`,
+and in this case the `python35` interpreter is automatically used.
+
+
+### Creating a set of packages
+
+With the previously explained method you can split packages from environments. and you can call as many packages as you want from whichever environment.
+Likely you will have at some point developed several packages with dependencies between each other.
+In such case it might make sense to make a set of packages which you can then import in your environments, just like we do with the `nixpkgs` repository.
+
 
 
 

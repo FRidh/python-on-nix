@@ -500,9 +500,9 @@ include our own version of `toolz`. To introduce our own package in the scope of
 `buildEnv.override` we used a
 [`let`](http://nixos.org/nix/manual/#sec-constructs) expression.
 
-## Handling dependencies
+### Handling dependencies
 
-So far the example, `toolz`, didn't have any dependencies on other Python
+So far, the example `toolz`, didn't have any dependencies on other Python
 packages or system libraries. According to the manual, the `buildPythonPackage`
 uses the arguments `buildInputs` and `propagatedBuildInputs`. If something is
 exclusively a build-time dependency, then the dependency should be included as a
@@ -626,18 +626,55 @@ meaning sometimes there's maybe a single test failing, and youE.g., if you're bu
 
 ### Develop local package
 
-In the previous Nix expression the source was fetched from an url. It is however also possible to just refer to a local path using
+As a Python developer you're likely aware of [development mode](http://pythonhosted.org/setuptools/setuptools.html#development-mode) (`python setup.py develop`);
+instead of installing the package this command creates a special link to the project code.
+That way, you can run updated code without having to reinstall after each and every change you make.
+Development mode is also available on Nix as [explained](http://nixos.org/nixpkgs/manual/#ssec-python-development) in the Nixpkgs manual.
+Let's see how you can use it.
+
+In the previous Nix expression the source was fetched from an url. We can also refer to a local source instead using
 
     src = ./path/to/source/tree;
 
-If we have a local path,
-We looked at how we package software on Nix. Why is this relevant for you, you might ask?
+Now, if we create a `shell.nix` file which calls `buildPythonPackage`, and if `src`
+is a local source, and if the local source has a `setup.py`, then development
+mode is activated.
+
+In the following example we create a simple environment that
+has a Python 3.5 version of our package in it, as well as its dependencies and
+other packages we like to have in the environment, all specified with `propagatedBuildInputs`.
+Indeed, we can just add any package we like to have in our environment to `propagatedBuildInputs`.
 
 
+    with import <nixpkgs>;
+    with pkgs.python35Packages;
+
+    buildPythonPackage rec {
+        name = "mypackage";
+        src = ./path/to/package/source;
+        propagatedBuildInputs = [ pytest numpy pkgs.libsndfile ];
+    };
+
+It is important to note that due to how development mode is implemented on Nix it is not possible to have multiple packages simultaneously in development mode.
 
 
-When developing a Python package, one commonly uses `python setup.py develop`.
-The package is build
+## Organising your packages
+
+So far we discussed how you can use Python on Nix, and how you can develop with
+it. We've looked at how you write expressions to package Python packages, and we
+looked at how you can create environments in which specified packages are
+available.
+
+At some point you'll likely have multiple packages which you would
+like to be able to use in different projects. In order to minimise unnecessary
+duplication we now look at how you can maintain yourself a repository with your
+own packages. The important functions here are `import` and `callPackage`.
+
+In previous examples we used `import` generally in combination with the `with`
+statement, thereby introducing the attributes of the imported attribute set into
+the local scope. We can also simply assign the imported attribute set using a `let` expression.
+
+Consider the following `shell.nix` file
 
 
 
@@ -668,3 +705,4 @@ Packages added here are added to the Nix store, but not made available to users.
     ];
 
 
+### Why should I use buildEnv for creating environments instead of buildPythonPackage or mkDerivation?

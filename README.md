@@ -8,3 +8,8 @@ Documentation is build from CommonMark/Markdown and ReStructuredText using [Sphi
 When using Nix/NixOS, just run `nix-shell` in this directory to obtain a shell with all dependencies.
 To build html docs, just run `make html`.
 
+## Merged into Nixpkgs documentation
+
+These docs are not maintained anymore since they we're merged into the Nixpkgs manual.
+See http://hydra.nixos.org/job/nixpkgs/trunk/manual/latest
+
